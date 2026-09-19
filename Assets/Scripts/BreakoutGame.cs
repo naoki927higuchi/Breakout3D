@@ -3,8 +3,8 @@ using UnityEngine;
 
 public sealed partial class BreakoutGame : MonoBehaviour
 {
-    const float Radius = .23f, BaseSpeed = 8f, MaxSpeed = 28f;
-    const float BreakSpeedIncrease = .55f, MultiballSpeedIncrease = 1.5f;
+    const float Radius = .23f, BaseSpeed = 8f, MaxSpeed = 22f;
+    const float BreakSpeedIncrease = .32f, MultiballSpeedIncrease = .6f;
     sealed class Ball { public Transform view; public Vector2 pos, dir; public int combo; }
     sealed class Brick { public Transform view; public Vector2 pos; public int hp; public Renderer renderer; }
     readonly List<Ball> balls = new List<Ball>();
@@ -15,7 +15,7 @@ public sealed partial class BreakoutGame : MonoBehaviour
     Material cyan, white, red, damaged, gold;
     float paddleX, speed, flashUntil;
     int destroyed, bestCombo;
-    bool started, ended, won;
+    bool started, ended, won, multiballPending;
     string notice = "";
     GUIStyle title, small, label, banner;
     Vector3 lastMouse;
@@ -63,7 +63,7 @@ public sealed partial class BreakoutGame : MonoBehaviour
         foreach (var b in balls) Destroy(b.view.gameObject); balls.Clear();
         foreach (var b in bricks) Destroy(b.view.gameObject); bricks.Clear();
         foreach (var p in pieces) if (p) Destroy(p); pieces.Clear();
-        speed = BaseSpeed; destroyed = bestCombo = 0; started = ended = won = false; notice = "";
+        speed = BaseSpeed; destroyed = bestCombo = 0; started = ended = won = multiballPending = false; notice = "";
         paddleX = 0; paddle.position = new Vector3(0,.25f,-7.7f); lastMouse = Input.mousePosition;
         for (int row = 0; row < 6; row++) for (int col = 0; col < 9; col++)
         {
@@ -121,6 +121,15 @@ public sealed partial class BreakoutGame : MonoBehaviour
                 {
                     float offset = Mathf.Clamp((ball.pos.x-paddleX)/1.35f,-1,1);
                     ball.dir = new Vector2(offset*.85f,1).normalized; ball.pos.y = -7.17f; ball.combo = 0;
+                    if (multiballPending && balls.Count == 1)
+                    {
+                        multiballPending = false;
+                        // Launch both balls upward, with a clearly separated second trajectory.
+                        float secondX = ball.dir.x >= 0 ? ball.dir.x - .45f : ball.dir.x + .45f;
+                        AddBall(ball.pos, new Vector2(secondX, ball.dir.y));
+                        speed = Mathf.Min(MaxSpeed, speed + MultiballSpeedIncrease);
+                        notice = "MULTIBALL / SPEED UP!"; flashUntil = Time.time+2.5f;
+                    }
                 }
                 for (int j = bricks.Count - 1; j >= 0; j--)
                 {
@@ -135,11 +144,10 @@ public sealed partial class BreakoutGame : MonoBehaviour
                         destroyed++; speed = Mathf.Min(MaxSpeed, speed + BreakSpeedIncrease); ball.combo++; bestCombo = Mathf.Max(bestCombo, ball.combo);
                         if (destroyed % 5 == 0 && balls.Count == 1)
                         {
-                            AddBall(ball.pos, new Vector2(-ball.dir.x + .35f,ball.dir.y));
-                            speed = Mathf.Min(MaxSpeed, speed + MultiballSpeedIncrease);
-                            notice = "MULTIBALL / SPEED UP!"; flashUntil = Time.time+2.5f;
+                            multiballPending = true;
+                            notice = "MULTIBALL READY / RETURN TO PADDLE"; flashUntil = Time.time+2.5f;
                         }
-                        if (bricks.Count == 0) { ended = won = true; }
+                        if (bricks.Count == 0) { ended = won = true; multiballPending = false; }
                     }
                     else { brick.renderer.sharedMaterial = damaged; if (brick.view.childCount > 0) Destroy(brick.view.GetChild(0).gameObject); }
                     break;
@@ -149,7 +157,7 @@ public sealed partial class BreakoutGame : MonoBehaviour
             Sync(ball);
             if (ball.pos.y < -10.5f) { Destroy(ball.view.gameObject); balls.RemoveAt(i); }
         }
-        if (balls.Count == 0) { ended = true; won = false; }
+        if (balls.Count == 0) { ended = true; won = false; multiballPending = false; }
     }
     void Sync(Ball b) { b.view.position = new Vector3(b.pos.x,.4f,b.pos.y); }
     void Burst(Vector2 pos, Material mat)
@@ -178,8 +186,10 @@ public sealed partial class BreakoutGame : MonoBehaviour
         GUI.Label(new Rect(820,28,430,35),$"BROKEN {destroyed:00}/54     BALLS {balls.Count}/2",label);
         GUI.Label(new Rect(820,62,430,30),$"SPEED {speed/BaseSpeed:0.00}x     BEST COMBO {bestCombo}",small);
         GUI.Label(new Rect(34,748,1220,30),"MOVE  Mouse / A D / Arrows     LAUNCH  Click / Space     RESTART  R     QUIT  Esc",small);
-        GUI.color = new Color(1,.5f,.5f); GUI.Label(new Rect(34,716,1000,25),"RED = 2 HITS     /     EVERY 5 BLOCKS = MULTIBALL + SPEED UP",small);
+        GUI.color = new Color(1,.5f,.5f); GUI.Label(new Rect(34,716,1000,25),"RED = 2 HITS     /     EVERY 5 BLOCKS: MULTIBALL ON NEXT PADDLE HIT",small);
         GUI.color = Color.white;
+        if (multiballPending && !ended)
+            GUI.Label(new Rect(820,92,440,30),"MULTIBALL READY: NEXT PADDLE HIT",small);
         if (Time.time < flashUntil && !ended) GUI.Label(new Rect(0,140,1280,65),notice,banner);
         if (!started || ended)
         {
