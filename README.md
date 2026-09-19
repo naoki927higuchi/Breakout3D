@@ -4,7 +4,7 @@ Unity 6000.6.2f1用の3Dブロック崩し。外部アセットは不要です�
 
 ## 遊び方
 
-`Builds/Windows/NeonBreak.exe` を起動してください。
+配布ZIPを展開し、中の `NeonBreak.exe` を起動してください。Unityメニューからビルドした場合は `Builds/Windows/NeonBreak.exe` に出力されます。
 
 - マウス、左右矢印、A / D：パドル移動
 - クリック / Space：発射
@@ -37,7 +37,31 @@ Unity Hubでこのフォルダーを追加し、`Assets/Scenes/Breakout.unity`�
 ゲームの見た目と盤面は`Assets/Scripts/BreakoutGame.cs`で生成します。
 X/Z平面の独自衝突処理を短い時間刻みで実行し、Y方向は3D表示に使っています。
 
-再ビルド：Unityメニューの **Breakout > Create Scene and Build Windows**。
+通常ビルド：Unityメニューの **Breakout > Build Windows Player**。
+既存のシーンとマテリアルを使用し、ビルドのたびにシーンを再作成しません。
+
+## 再頒布用のビルド
+
+プロジェクトのフォルダーでPowerShellから実行します。
+
+```powershell
+.\Build-Windows.ps1 -Version 1.0.0
+```
+
+`ProjectSettings/ProjectVersion.txt` のUnityバージョンをUnity Hubの標準インストール先から検出します。
+別の場所にある場合は `-UnityEditor "D:\Unity\Editor\Unity.exe"` を指定してください。
+
+1. 毎回新しい作業フォルダーへWindows x64版をビルド。
+2. Unityランタイム、ゲームデータ、日本語の遊び方、バージョン情報をまとめてZIP化。
+3. ZIPを空白入りの別フォルダーに展開し、その実行ファイルで自動テスト。
+4. 成功したZIPとSHA256チェックサムを `Builds/Releases/` に保存。
+
+ZIPにはバージョンと実行ごとの識別子が付き、以前の配布物を上書きしません。
+`Builds/Runs/` に中間生成物とビルド・テストのログを保存します。
+実行ファイルだけでなくZIP全体を渡してください。受け取る側にUnity Editorは不要です。
+ビルド処理は外部へのアップロードを行いません。検証はこのPC上での実施であり、別PCでの動作保証ではありません。
+Unityの開発用診断フォルダーは配布から除外し、必要なランタイムは同梱します。
+ゲーム本体のルールや操作は変更していません。
 
 ## 自動確認
 

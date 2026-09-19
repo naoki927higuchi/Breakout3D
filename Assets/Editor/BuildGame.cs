@@ -1,31 +1,36 @@
 using UnityEditor;
-using UnityEditor.SceneManagement;
 using UnityEngine;
 
 public static class BuildGame
 {
-    [MenuItem("Breakout/Create Scene and Build Windows")]
+    [MenuItem("Breakout/Build Windows Player")]
     public static void Build()
     {
-        System.IO.Directory.CreateDirectory("Assets/Resources");
-        if (!AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/GameMaterial.mat"))
+        const string scene = "Assets/Scenes/Breakout.unity";
+        if (!AssetDatabase.LoadAssetAtPath<SceneAsset>(scene) ||
+            !AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/GameMaterial.mat"))
+            throw new System.Exception("Required scene or material is missing. Restore the project assets before building.");
+        string output = Argument("-breakoutOutput", "Builds/Windows/NeonBreak.exe");
+        string previousVersion = PlayerSettings.bundleVersion;
+        try
         {
-            var material = new Material(Shader.Find("Standard"));
-            material.EnableKeyword("_EMISSION");
-            AssetDatabase.CreateAsset(material, "Assets/Resources/GameMaterial.mat");
+            PlayerSettings.bundleVersion = Argument("-breakoutVersion", previousVersion);
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(output));
+            var result = BuildPipeline.BuildPlayer(new[] { scene }, output,
+                BuildTarget.StandaloneWindows64, BuildOptions.None);
+            if (result.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded)
+                throw new System.Exception("Build failed: " + result.summary.result);
         }
-        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        new GameObject("Breakout Game", typeof(BreakoutGame));
-        System.IO.Directory.CreateDirectory("Assets/Scenes");
-        EditorSceneManager.SaveScene(scene, "Assets/Scenes/Breakout.unity");
-        EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene("Assets/Scenes/Breakout.unity", true) };
-        PlayerSettings.productName = "NEON BREAK / 3D";
-        PlayerSettings.companyName = "Independent";
-        PlayerSettings.defaultScreenWidth = 1280;
-        PlayerSettings.defaultScreenHeight = 800;
-        PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
-        var result = BuildPipeline.BuildPlayer(EditorBuildSettings.scenes, "Builds/Windows/NeonBreak.exe", BuildTarget.StandaloneWindows64, BuildOptions.None);
-        if (result.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded)
-            throw new System.Exception("Build failed: " + result.summary.result);
+        finally { PlayerSettings.bundleVersion = previousVersion; }
+    }
+
+    static string Argument(string name, string fallback)
+    {
+        var args = System.Environment.GetCommandLineArgs();
+        int index = System.Array.IndexOf(args, name);
+        if (index < 0) return fallback;
+        if (index + 1 >= args.Length || args[index + 1].StartsWith("-"))
+            throw new System.ArgumentException("Missing value for " + name);
+        return args[index + 1];
     }
 }
