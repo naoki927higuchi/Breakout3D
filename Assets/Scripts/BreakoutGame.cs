@@ -55,11 +55,13 @@ public sealed partial class BreakoutGame : MonoBehaviour
         Box("Top Rail", new Vector3(0,0,10), new Vector3(17,.65f,.25f), cyan);
         Box("Drain", new Vector3(0,-.15f,-9.7f), new Vector3(16.5f,.06f,.08f), red);
         paddle = Box("Paddle", new Vector3(0,.25f,-7.7f), new Vector3(2.7f,.5f,.6f), cyan).transform;
+        InitializeAudio();
         ResetGame();
         if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-selftest") >= 0) RunSelfTests();
     }
     void ResetGame()
     {
+        StopSounds();
         foreach (var b in balls) Destroy(b.view.gameObject); balls.Clear();
         foreach (var b in bricks) Destroy(b.view.gameObject); bricks.Clear();
         foreach (var p in pieces) if (p) Destroy(p); pieces.Clear();
@@ -84,6 +86,7 @@ public sealed partial class BreakoutGame : MonoBehaviour
     }
     void Update()
     {
+        if (Input.GetKeyDown(KeyCode.M)) ToggleSound();
         if (Input.GetKeyDown(KeyCode.R)) { ResetGame(); return; }
         if (Input.GetKeyDown(KeyCode.Escape)) Application.Quit();
         if (ended) return;
@@ -99,7 +102,7 @@ public sealed partial class BreakoutGame : MonoBehaviour
         if (!started)
         {
             balls[0].pos = new Vector2(paddleX,-7); Sync(balls[0]);
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0)) started = true;
+            if (Input.GetKeyDown(KeyCode.Space) || Input.GetMouseButtonDown(0)) { started = true; PlaySound(Sound.Launch); }
             return;
         }
         StepSimulation(Time.deltaTime);
@@ -115,12 +118,13 @@ public sealed partial class BreakoutGame : MonoBehaviour
             {
                 float dt = Mathf.Min(remaining,.006f); remaining -= dt;
                 Vector2 prev = ball.pos; ball.pos += ball.dir * speed * dt;
-                if (Mathf.Abs(ball.pos.x) > 8.04f) { ball.pos.x = Mathf.Sign(ball.pos.x)*8.04f; ball.dir.x = -Mathf.Sign(ball.pos.x)*Mathf.Abs(ball.dir.x); }
-                if (ball.pos.y > 9.64f) { ball.pos.y = 9.64f; ball.dir.y = -Mathf.Abs(ball.dir.y); }
+                if (Mathf.Abs(ball.pos.x) > 8.04f) { ball.pos.x = Mathf.Sign(ball.pos.x)*8.04f; ball.dir.x = -Mathf.Sign(ball.pos.x)*Mathf.Abs(ball.dir.x); PlaySound(Sound.Wall); }
+                if (ball.pos.y > 9.64f) { ball.pos.y = 9.64f; ball.dir.y = -Mathf.Abs(ball.dir.y); PlaySound(Sound.Wall); }
                 if (ball.dir.y < 0 && prev.y >= -7.17f && ball.pos.y <= -7.17f && Mathf.Abs(ball.pos.x - paddleX) < 1.35f + Radius)
                 {
                     float offset = Mathf.Clamp((ball.pos.x-paddleX)/1.35f,-1,1);
                     ball.dir = new Vector2(offset*.85f,1).normalized; ball.pos.y = -7.17f; ball.combo = 0;
+                    PlaySound(Sound.Paddle);
                     if (multiballPending && balls.Count == 1)
                     {
                         multiballPending = false;
@@ -128,6 +132,7 @@ public sealed partial class BreakoutGame : MonoBehaviour
                         float secondX = ball.dir.x >= 0 ? ball.dir.x - .45f : ball.dir.x + .45f;
                         AddBall(ball.pos, new Vector2(secondX, ball.dir.y));
                         speed = Mathf.Min(MaxSpeed, speed + MultiballSpeedIncrease);
+                        PlaySound(Sound.Multiball);
                         notice = "MULTIBALL / SPEED UP!"; flashUntil = Time.time+2.5f;
                     }
                 }
@@ -142,22 +147,24 @@ public sealed partial class BreakoutGame : MonoBehaviour
                     {
                         Burst(brick.pos, brick.renderer.sharedMaterial); Destroy(brick.view.gameObject); bricks.RemoveAt(j);
                         destroyed++; speed = Mathf.Min(MaxSpeed, speed + BreakSpeedIncrease); ball.combo++; bestCombo = Mathf.Max(bestCombo, ball.combo);
+                        PlaySound(Sound.Break, 1 + Mathf.Min(ball.combo - 1, 7) * .035f);
                         if (destroyed % 5 == 0 && balls.Count == 1)
                         {
+                            if (!multiballPending) PlaySound(Sound.Ready);
                             multiballPending = true;
                             notice = "MULTIBALL READY / RETURN TO PADDLE"; flashUntil = Time.time+2.5f;
                         }
-                        if (bricks.Count == 0) { ended = won = true; multiballPending = false; }
+                        if (bricks.Count == 0) { ended = won = true; multiballPending = false; StopSounds(); PlaySound(Sound.Clear); }
                     }
-                    else { brick.renderer.sharedMaterial = damaged; if (brick.view.childCount > 0) Destroy(brick.view.GetChild(0).gameObject); }
+                    else { PlaySound(Sound.Armor); brick.renderer.sharedMaterial = damaged; if (brick.view.childCount > 0) Destroy(brick.view.GetChild(0).gameObject); }
                     break;
                 }
                 if (ball.pos.y < -10.5f) break;
             }
             Sync(ball);
-            if (ball.pos.y < -10.5f) { Destroy(ball.view.gameObject); balls.RemoveAt(i); }
+            if (ball.pos.y < -10.5f) { Destroy(ball.view.gameObject); balls.RemoveAt(i); if (balls.Count > 0 && !ended) PlaySound(Sound.Lost); }
         }
-        if (balls.Count == 0) { ended = true; won = false; multiballPending = false; }
+        if (balls.Count == 0 && !ended) { ended = true; won = false; multiballPending = false; StopSounds(); PlaySound(Sound.GameOver); }
     }
     void Sync(Ball b) { b.view.position = new Vector3(b.pos.x,.4f,b.pos.y); }
     void Burst(Vector2 pos, Material mat)
@@ -186,6 +193,7 @@ public sealed partial class BreakoutGame : MonoBehaviour
         GUI.Label(new Rect(820,28,430,35),$"BROKEN {destroyed:00}/54     BALLS {balls.Count}/2",label);
         GUI.Label(new Rect(820,62,430,30),$"SPEED {speed/BaseSpeed:0.00}x     BEST COMBO {bestCombo}",small);
         GUI.Label(new Rect(34,748,1220,30),"MOVE  Mouse / A D / Arrows     LAUNCH  Click / Space     RESTART  R     QUIT  Esc",small);
+        GUI.Label(new Rect(1020,748,250,30),soundMuted ? "M  SOUND OFF" : "M  SOUND ON",small);
         GUI.color = new Color(1,.5f,.5f); GUI.Label(new Rect(34,716,1000,25),"RED = 2 HITS     /     EVERY 5 BLOCKS: MULTIBALL ON NEXT PADDLE HIT",small);
         GUI.color = Color.white;
         if (multiballPending && !ended)

@@ -24,11 +24,23 @@ public sealed partial class BreakoutGame
     {
         try
         {
+            Require(cam.GetComponent<AudioListener>() != null && soundVoices.Length == 8, "Audio listener and bounded voice pool initialized");
+            foreach (var clip in soundClips)
+            {
+                var samples = new float[clip.samples];
+                Require(clip.GetData(samples, 0), "Audio data readable: " + clip.name);
+                float peak = 0;
+                foreach (float sample in samples) peak = Mathf.Max(peak, Mathf.Abs(sample));
+                Require(peak > .01f && peak < .5f && samples[0] == 0 && samples[samples.Length-1] == 0,
+                    "Audible bounded waveform with click-free ends: " + clip.name);
+            }
             Require(bricks.Count == 54 && balls.Count == 1, "Initial 54 bricks and one ball");
             var armored = bricks.Find(b => b.hp == 2);
             Hit(armored);
+            Require(soundEvents[(int)Sound.Armor] == 1 && soundEvents[(int)Sound.Break] == 0, "Armor hit plays armor sound only");
             Require(armored.hp == 1 && bricks.Count == 54 && speed == BaseSpeed, "Red brick survives first hit without acceleration");
             Hit(armored);
+            Require(soundEvents[(int)Sound.Break] == 1, "Brick destruction plays break sound");
             Require(!bricks.Contains(armored) && destroyed == 1 && speed > BaseSpeed, "Red brick breaks on second hit and accelerates ball");
             Require(Mathf.Approximately(speed, 8.32f), "Each destroyed brick adds 0.32 speed");
             for (int i=0;i<3;i++) Hit(bricks.Find(b => b.hp == 1));
@@ -40,6 +52,7 @@ public sealed partial class BreakoutGame
             Require(balls.Count == 1 && multiballPending && balls[0].combo == 1 && bestCombo == 4, "Fifth total break reserves ball across combo reset");
             Require(Mathf.Approximately(speed, 9.6f), "No multiball acceleration before paddle return");
             PaddleHit();
+            Require(soundEvents[(int)Sound.Paddle] == 2 && soundEvents[(int)Sound.Ready] == 1 && soundEvents[(int)Sound.Multiball] == 1, "Paddle, ready and multiball sounds follow actual gameplay events");
             Require(balls.Count == 2 && !multiballPending && Mathf.Approximately(speed,10.2f), "Paddle return consumes reservation and adds 0.6 speed");
             Require(balls[0].dir.y > 0 && balls[1].dir.y > 0 && Vector2.Angle(balls[0].dir,balls[1].dir) > 10, "Both balls launch upward on distinct trajectories");
             PaddleHit();
@@ -66,6 +79,7 @@ public sealed partial class BreakoutGame
             Require(balls.Count == 2 && Mathf.Approximately(speed,16.2f), "New ball also activates reservation on paddle return");
             balls[1].pos = new Vector2(0,-11); StepSimulation(.006f);
             balls[0].pos = new Vector2(0,-11); StepSimulation(.006f);
+            Require(soundEvents[(int)Sound.Lost] > 0 && soundEvents[(int)Sound.GameOver] == 1, "Ball loss and game over have distinct sounds");
             Require(balls.Count == 0 && ended && !won, "Losing every ball ends game");
             ResetGame();
             Require(!ended && !started && speed == BaseSpeed && bricks.Count == 54 && destroyed == 0 && bestCombo == 0, "Restart restores initial state and counters");
@@ -95,6 +109,16 @@ public sealed partial class BreakoutGame
             for (int i=bricks.Count-1;i>0;i--) { Destroy(bricks[i].view.gameObject); bricks.RemoveAt(i); }
             Hit(last);
             Require(ended && won && bricks.Count == 0, "Final brick triggers all clear");
+            Require(soundEvents[(int)Sound.Clear] == 1, "Final brick plays clear cue once");
+            ToggleSound();
+            ResetGame();
+            Require(soundMuted, "Mute preference survives restart");
+            PlaySound(Sound.Launch);
+            bool allStopped = true;
+            foreach (var voice in soundVoices) allStopped &= !voice.isPlaying;
+            Require(allStopped, "Muted sounds do not start playback");
+            ToggleSound();
+            Require(!soundMuted, "Sound can be enabled again");
             Debug.Log($"SELF TESTS PASSED ({passedChecks} checks)");
             Application.Quit(0);
         }
