@@ -92,3 +92,7 @@ Unityの開発用診断フォルダーは配布から除外し、必要なラン
 - [Breakout3D 1.0.0](Distribution/Breakout3D-1.0.0-Windows.zip) / [SHA256](Distribution/Breakout3D-1.0.0-Windows.zip.sha256)
 
 アクセス権のあるユーザーがZIPのファイル画面からダウンロードできます。ZIP全体を展開し、同梱説明書に従ってください。
+
+## ソースと配布物の公開
+
+[最新バイナリー](Distribution/README.md)からWindows版ZIPをダウンロードできます。ソース一式はこのリポジトリで公開しています。共同開発、Issues、Pull requestsは受け付けていません。
